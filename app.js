@@ -179,7 +179,12 @@ const loroWisdom = [
   "Eu sou calmo, as pessoas é que me irritam.",
 ];
 
-const validGroups = [];
+const validGroups = [
+  '5521997139676@c.us',
+  '120363103086631400@g.us',
+  '5511996493028-1525458136@g.us',
+  '120363103086631400@g.us'
+];
 
 const conf_shareWisdom   = true;
 const conf_downloadMedia = true;
