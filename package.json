@@ -1,5 +1,8 @@
 {
   "dependencies": {
     "venom-bot": "^5.0.21"
+  },
+  "scripts": {
+    "start": "node app.js"
   }
 }
