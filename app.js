@@ -189,14 +189,20 @@ const validGroups = [
 const conf_shareWisdom   = true;
 const conf_downloadMedia = true;
 const conf_logMessage    = true;
+const conf_sessionName   = 'Loro';
+
+const conf_puppeteerArgs = {
+  // executablePath: '/usr/bin/chromium', // For running inside a container
+};
 
 venom
   .create({
-    session: 'Loro' //name of session
+    session: conf_sessionName,
+    puppeteerOptions: conf_puppeteerArgs
   })
   .then((client) => start(client))
-  .catch((erro) => {
-    console.log(erro);
+  .catch((error) => {
+    console.log(error);
   });
 
 function start(client) {
