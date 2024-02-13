@@ -1,8 +1,11 @@
 // Supports ES6
 // import { create, Whatsapp } from 'venom-bot';
-const venom = require('venom-bot');
-const fs = require('node:fs');
-const mime = require('mime-types');
+const venom        = require('venom-bot');
+const fs           = require('node:fs');
+const mime         = require('mime-types');
+const whisper_node = require('whisper-node');
+const path         = require('path');
+const ffmpeg       = require('fluent-ffmpeg');
 
 const loroWisdom = [
   "A velocidade da luz é mais rápida do que a da escuridão.",
@@ -180,30 +183,34 @@ const loroWisdom = [
 ];
 
 const validGroups = [
-  '5521997139676@c.us',
-  '120363103086631400@g.us',
-  '5511996493028-1525458136@g.us',
-  '120363103086631400@g.us'
 ];
 
 const conf_shareWisdom   = true;
 const conf_downloadMedia = true;
 const conf_logMessage    = true;
+const conf_transcribe    = true;
 const conf_sessionName   = 'Loro';
 
 const conf_puppeteerArgs = {
   // executablePath: '/usr/bin/chromium', // For running inside a container
 };
 
-venom
-  .create({
+const conf_WhisperOptions = {
+  modelName: "small",
+  whisperOptions: {
+    gen_file_txt: true,
+    language: 'auto'
+  }
+};
+
+venom.create({
     session: conf_sessionName,
     puppeteerOptions: conf_puppeteerArgs
   })
-  .then((client) => start(client))
-  .catch((error) => {
-    console.log(error);
-  });
+    .then((client) => start(client))
+    .catch((error) => {
+      console.log(error);
+    });
 
 function start(client) {
   client.onAnyMessage(async (message) => {
@@ -228,31 +235,36 @@ async function downloadMedia(message, client) {
   if (isMedia === true || message.isMMS === true) {
     const buffer = await client.decryptFile(message);
 
-    const fileName = `media-from-${message.from}-${message.mediaKeyTimestamp}.${mime.extension(message.mimetype)}`;
-    fs.writeFile(fileName, buffer, (err) => {
+    const targetPath = path.resolve(__dirname, `media-from-${message.from}-${message.mediaKeyTimestamp}.${mime.extension(message.mimetype)}`);
+    fs.writeFile(targetPath, buffer, (err) => {
       if (err) {
         console.error(err);
       } else {
-        console.log('Successfully wrote', fileName)
+        console.log('Successfully wrote', targetPath)
+        if (conf_transcribe && mime.extension(message.mimetype) === 'oga') {
+          transcribe(targetPath, conf_WhisperOptions)
+          .then((text => {
+            let destination = resolveDestination(message);
+            client.sendText(destination, `🦜 Currupaco!\n*Transcrição do Áudio:*\n_"${text.trim()}"_`)
+                  .then((result) => {
+                    console.log('Result: ', result); //return object success
+                  })
+                  .catch((erro) => {
+                    console.error('Error when sending: ', erro);
+                  });
+          }));
+        }
       }
     });
   }
 }
 
-function shareWisdom(message, client) {
+async function shareWisdom(message, client) {
   if (message.body) {
     const lowerCaseBody = message.body.toLowerCase();
     let wisdom = loroWisdom[Math.floor(Math.random() * loroWisdom.length)];
     if (lowerCaseBody.includes('loro')) {
-      let destination = message.from;
-
-      if (message.isGroupMsg === true && validGroups.includes(message.groupInfo.id)) {
-        destination = message.groupInfo.id;
-      }
-
-      if (message.fromMe === true) {
-        destination = message.to;
-      }
+      let destination = resolveDestination(message);
 
       client.sendText(destination, `🦜 Currupaco!\n_"${wisdom}"_`)
         .then((result) => {
@@ -265,3 +277,51 @@ function shareWisdom(message, client) {
   }
 }
 
+function resolveDestination(message) {
+  let destination = message.from;
+
+  if (message.isGroupMsg === true && validGroups.includes(message.groupInfo.id)) {
+    destination = message.groupInfo.id;
+  }
+
+  if (message.fromMe === true) {
+    destination = message.to;
+  }
+  return destination;
+}
+
+async function transcribe(target, options) {
+  const inputFilePath    = target;
+  const inputFileName    = path.basename(inputFilePath);
+  const outputFileName   = `${inputFileName}.wav`;
+  const outputFilePath   = path.resolve(__dirname, outputFileName);
+  const transcriptedFile = path.resolve(__dirname, `${outputFilePath}.txt`)
+
+
+  ffmpeg().input(inputFilePath)
+          .audioChannels(1)
+          .withAudioFrequency(16000)
+          .output(outputFilePath)
+          .run();
+  
+  console.log(`FFMPEG Wrote ${outputFilePath}`)
+
+  await whisper_node.whisper(
+    path.resolve(__dirname, outputFilePath),
+    options
+  );
+
+  const data = fs.readFileSync(transcriptedFile, 'utf8');
+  fs.rm(outputFilePath, (err) => {
+    if (err) {
+      console.error(err);
+    }
+  });
+  fs.rm(transcriptedFile, (err) => {
+    if (err) {
+      console.error(err);
+    }
+  });
+
+  return data;
+}

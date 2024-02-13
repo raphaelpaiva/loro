@@ -1,6 +1,8 @@
 {
   "dependencies": {
-    "venom-bot": "^5.0.21"
+    "fluent-ffmpeg": "^2.1.2",
+    "venom-bot": "^5.0.21",
+    "whisper-node": "^1.1.1"
   },
   "scripts": {
     "start": "node app.js"
