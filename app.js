@@ -209,13 +209,13 @@ venom.create({
   })
     .then((client) => start(client))
     .catch((error) => {
-      console.log(error);
+      console.error('Error creating client', error);
     });
 
 function start(client) {
   client.onAnyMessage(async (message) => {
     if (conf_logMessage) {
-      console.log(message);
+      logMessage(message);
     }
 
     if (conf_downloadMedia) {
@@ -229,29 +229,35 @@ function start(client) {
   client.onMessage((message) => {});
 }
 
+async function logMessage(message) {
+  const logPath = path.resolve(__dirname, 'message.log');
+  const messageString = JSON.stringify(message);
+  fs.appendFile(logPath, `\n${messageString}`, function (err) {
+    if (err) {
+      console.error(`Error writing to message log: ${err}`);
+    }
+  });
+}
+
 async function downloadMedia(message, client) {
   let isMedia = !(Object.keys(message.mediaData).length === 0);
 
   if (isMedia === true || message.isMMS === true) {
     const buffer = await client.decryptFile(message);
 
-    const targetPath = path.resolve(__dirname, `media-from-${message.from}-${message.mediaKeyTimestamp}.${mime.extension(message.mimetype)}`);
+    const fileExtension = mime.extension(message.mimetype);
+    const targetFileName = `media-from-${message.from}-${message.mediaKeyTimestamp}.${fileExtension}`;
+    const targetPath = path.resolve(__dirname, targetFileName);
     fs.writeFile(targetPath, buffer, (err) => {
       if (err) {
         console.error(err);
       } else {
-        console.log('Successfully wrote', targetPath)
+        console.log('Successfully wrote', targetPath);
         if (conf_transcribe && mime.extension(message.mimetype) === 'oga') {
           transcribe(targetPath, conf_WhisperOptions)
           .then((text => {
             let destination = resolveDestination(message);
-            client.sendText(destination, `🦜 Currupaco!\n*Transcrição do Áudio:*\n_"${text.trim()}"_`)
-                  .then((result) => {
-                    console.log('Result: ', result); //return object success
-                  })
-                  .catch((erro) => {
-                    console.error('Error when sending: ', erro);
-                  });
+            sendMessage(client, destination, `*Transcrição do Áudio:*\n_"${text.trim()}"_`);
           }));
         }
       }
@@ -265,14 +271,7 @@ async function shareWisdom(message, client) {
     let wisdom = loroWisdom[Math.floor(Math.random() * loroWisdom.length)];
     if (lowerCaseBody.includes('loro')) {
       let destination = resolveDestination(message);
-
-      client.sendText(destination, `🦜 Currupaco!\n_"${wisdom}"_`)
-        .then((result) => {
-          console.log('Result: ', result); //return object success
-        })
-        .catch((erro) => {
-          console.error('Error when sending: ', erro);
-        });
+      sendMessage(client, destination, `_"${wisdom}"_`);
     }
   }
 }
@@ -287,6 +286,7 @@ function resolveDestination(message) {
   if (message.fromMe === true) {
     destination = message.to;
   }
+
   return destination;
 }
 
@@ -295,7 +295,7 @@ async function transcribe(target, options) {
   const inputFileName    = path.basename(inputFilePath);
   const outputFileName   = `${inputFileName}.wav`;
   const outputFilePath   = path.resolve(__dirname, outputFileName);
-  const transcriptedFile = path.resolve(__dirname, `${outputFilePath}.txt`)
+  const transcribedFile = path.resolve(__dirname, `${outputFilePath}.txt`)
 
 
   ffmpeg().input(inputFilePath)
@@ -311,17 +311,28 @@ async function transcribe(target, options) {
     options
   );
 
-  const data = fs.readFileSync(transcriptedFile, 'utf8');
-  fs.rm(outputFilePath, (err) => {
-    if (err) {
-      console.error(err);
-    }
-  });
-  fs.rm(transcriptedFile, (err) => {
-    if (err) {
-      console.error(err);
-    }
-  });
+  const data = fs.readFileSync(transcribedFile, 'utf8');
+  fs.rm(outputFilePath, (err) => { rm_callback(err, outputFilePath); });
+  fs.rm(transcribedFile, (err) => { rm_callback(err, transcribedFile); });
 
   return data;
+}
+
+function rm_callback(err, fileName) {
+  if (err) {
+    console.error(`Error removing ${fileName}`, err);
+  } else {
+    console.log('Successfully removed file after processing:', fileName);
+  }
+}
+
+async function sendMessage(client, destination, text) {
+  const message = `🦜 Currupaco!\n${text}`
+  client.sendText(destination, message)
+        .then((result) => {
+          console.log(`Successfully sent message to ${destination}`);
+        })
+        .catch((error) => {
+          console.error('Error when sending: ', error);
+        });
 }
