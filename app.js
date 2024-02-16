@@ -12,6 +12,8 @@ downloadModel(conf.whisperOptions.modelName);
 
 const whisper_node = require('whisper-node');
 
+process.chdir(__dirname); // whisper-node changes directory and does not come back
+
 venom.create({
     session: conf.sessionName,
     puppeteerOptions: conf.puppeteerArgs
