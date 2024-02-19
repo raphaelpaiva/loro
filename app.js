@@ -1,14 +1,12 @@
 // Supports ES6
 const venom        = require('venom-bot');
-const whisper_node = require('whisper-node');
 const fs           = require('node:fs');
 const mime         = require('mime-types');
 const path         = require('path');
 const ffmpeg       = require('fluent-ffmpeg');
+const request      = require('request');
 
 const conf = loadConfig(path.resolve(__dirname, 'loro.json'));
-
-// process.chdir(__dirname); // whisper-node changes directory and does not come back
 
 const header = "🦜 Currupaco!"
 
@@ -65,7 +63,7 @@ async function downloadMedia(message, client) {
       } else {
         console.log('Successfully wrote', targetPath);
         if (conf.transcribe && mime.extension(message.mimetype) === 'oga') {
-          transcribe(targetPath, conf.whisperOptions).then((text => {
+          transcribe(targetPath,(text => {
             let destination = resolveDestination(message);
             sendReply(client, destination, `*Transcrição do Áudio:*\n_"${text.trim()}"_`, message.id);
           }));
@@ -100,39 +98,42 @@ function resolveDestination(message) {
   return destination;
 }
 
-async function transcribe(target, options) {
+async function transcribe(target, callback) {
   const inputFilePath    = target;
   const inputFileName    = path.basename(inputFilePath);
   const outputFileName   = `${inputFileName}.wav`;
   const outputFilePath   = path.resolve(__dirname, outputFileName);
-  const transcribedFile  = path.resolve(__dirname, `${outputFilePath}.txt`)
 
 
+  console.log(`Converting ${inputFilePath} to ${outputFilePath}`);
   ffmpeg().input(inputFilePath)
           .audioChannels(1)
           .withAudioFrequency(16000)
           .output(outputFilePath)
+          .on('end', () => {
+            console.log(`ffmpeg wrote ${outputFilePath}`);
+            
+            const readStream = fs.createReadStream(outputFilePath);
+            
+            const req = request.post('http://whisper:8099/inference', function (err, resp, body) {
+              if (err) {
+                console.log('Error!', err);
+              } else {
+                const transcript = JSON.parse(body);
+                callback(transcript.text);
+                fs.rm(outputFilePath, (err) => { rm_callback(err, outputFilePath); });
+                console.log('URL: ', transcript);
+              }
+            });
+
+
+            const form = req.form();
+            form.append('file', readStream);
+            form.append("temperature", "0.0");
+            form.append("temperature_inc", "0.2");
+            form.append("response_format", "json");
+          })
           .run();
-  
-  console.log(`FFMPEG Wrote ${outputFilePath}`)
-
-  if (options.modelName && options.modelDir) {
-    options.modelPath = `${options.modelDir}/${options.modelName}`;
-    options.modelName = undefined;
-  }
-
-  console.log(options);
-
-  await whisper_node.whisper(
-    path.resolve(__dirname, outputFilePath),
-    options
-  );
-
-  const data = fs.readFileSync(transcribedFile, 'utf8');
-  fs.rm(outputFilePath, (err) => { rm_callback(err, outputFilePath); });
-  fs.rm(transcribedFile, (err) => { rm_callback(err, transcribedFile); });
-
-  return data;
 }
 
 function rm_callback(err, fileName) {

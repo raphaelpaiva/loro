@@ -1,0 +1,15 @@
+---
+version: "3.8"
+services:
+  loro:
+    build:
+      context: .
+    depends_on:
+      - whisper
+
+  whisper:
+    build:
+      context: ./whisper
+    ports:
+      - 8099:8099
+    
