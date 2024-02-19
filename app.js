@@ -1,18 +1,16 @@
 // Supports ES6
 const venom        = require('venom-bot');
+const whisper_node = require('whisper-node');
 const fs           = require('node:fs');
 const mime         = require('mime-types');
 const path         = require('path');
 const ffmpeg       = require('fluent-ffmpeg');
-const shell        = require('shelljs');
 
 const conf = loadConfig(path.resolve(__dirname, 'loro.json'));
 
-downloadModel(conf.whisperOptions.modelName);
+// process.chdir(__dirname); // whisper-node changes directory and does not come back
 
-const whisper_node = require('whisper-node');
-
-process.chdir(__dirname); // whisper-node changes directory and does not come back
+const header = "🦜 Currupaco!"
 
 venom.create({
     session: conf.sessionName,
@@ -25,16 +23,18 @@ venom.create({
 
 function start(client) {
   client.onAnyMessage(async (message) => {
-    if (conf.logMessage) {
-      logMessage(message);
-    }
-
-    if (conf.downloadMedia) {
-      downloadMedia(message, client);
-    }
-
-    if (conf.shareWisdom) {
-      shareWisdom(message, client);
+    if (!message.body?.includes(header)) {
+      if (conf.logMessage) {
+        logMessage(message);
+      }
+  
+      if (conf.downloadMedia) {
+        downloadMedia(message, client);
+      }
+  
+      if (conf.shareWisdom) {
+        shareWisdom(message, client);
+      }
     }
   });
   client.onMessage((message) => {});
@@ -65,10 +65,9 @@ async function downloadMedia(message, client) {
       } else {
         console.log('Successfully wrote', targetPath);
         if (conf.transcribe && mime.extension(message.mimetype) === 'oga') {
-          transcribe(targetPath, conf.whisperOptions)
-          .then((text => {
+          transcribe(targetPath, conf.whisperOptions).then((text => {
             let destination = resolveDestination(message);
-            sendMessage(client, destination, `*Transcrição do Áudio:*\n_"${text.trim()}"_`);
+            sendReply(client, destination, `*Transcrição do Áudio:*\n_"${text.trim()}"_`, message.id);
           }));
         }
       }
@@ -82,7 +81,7 @@ async function shareWisdom(message, client) {
     let wisdom = conf.loroWisdom[Math.floor(Math.random() * conf.loroWisdom.length)];
     if (lowerCaseBody.includes('loro')) {
       let destination = resolveDestination(message);
-      sendMessage(client, destination, `_"${wisdom}"_`);
+      sendReply(client, destination, `_"${wisdom}"_`, message.id);
     }
   }
 }
@@ -106,7 +105,7 @@ async function transcribe(target, options) {
   const inputFileName    = path.basename(inputFilePath);
   const outputFileName   = `${inputFileName}.wav`;
   const outputFilePath   = path.resolve(__dirname, outputFileName);
-  const transcribedFile = path.resolve(__dirname, `${outputFilePath}.txt`)
+  const transcribedFile  = path.resolve(__dirname, `${outputFilePath}.txt`)
 
 
   ffmpeg().input(inputFilePath)
@@ -116,6 +115,13 @@ async function transcribe(target, options) {
           .run();
   
   console.log(`FFMPEG Wrote ${outputFilePath}`)
+
+  if (options.modelName && options.modelDir) {
+    options.modelPath = `${options.modelDir}/${options.modelName}`;
+    options.modelName = undefined;
+  }
+
+  console.log(options);
 
   await whisper_node.whisper(
     path.resolve(__dirname, outputFilePath),
@@ -137,8 +143,19 @@ function rm_callback(err, fileName) {
   }
 }
 
+async function sendReply(client, destination, text, msgId) {
+  const message = `${header}\n${text}`;
+  client.reply(destination, message, msgId)
+        .then((result) => {
+          console.log(`Successfully sent message to ${destination}`);
+        })
+        .catch((error) => {
+          console.error('Error when sending: ', error);
+        });
+}
+
 async function sendMessage(client, destination, text) {
-  const message = `🦜 Currupaco!\n${text}`
+  const message = `${header}\n${text}`;
   client.sendText(destination, message)
         .then((result) => {
           console.log(`Successfully sent message to ${destination}`);
@@ -160,6 +177,7 @@ function loadConfig(filePath) {
   
     "whisperOptions": {
       "modelName": "small",
+      "modelDir": `node_modules/whisper-node/lib/whisper.cpp/models`,
       "whisperOptions": {
         "gen_file_txt": true,
         "language": "auto"
@@ -345,43 +363,10 @@ function loadConfig(filePath) {
     ]
   }
   
+  console.log(`Loading configuration from ${filePath}`)
   const confFromFile = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-  return {...defaultConf, ...confFromFile};
+  // return {...defaultConf, ...confFromFile};
+  return Object.assign(defaultConf, confFromFile);
 }
 
-function downloadModel(modelName) {
-  try {
-    const NODE_MODULES_MODELS_PATH = require('whisper-node/dist/constants').NODE_MODULES_MODELS_PATH;
-    
-    const modelPath = path.resolve(__dirname, NODE_MODULES_MODELS_PATH);
-    console.log('cd into', modelPath);
-    shell.cd(modelPath);
-    // ensure running in correct path
-    if (!shell.which("./download-ggml-model.sh")) {
-      throw "whisper-node downloader is not being run from the correct path! cd to project root and run again."
-    }
-
-    // default is .sh
-    let scriptPath = "./download-ggml-model.sh"
-    // windows .cmd version
-    if(process.platform === 'win32') scriptPath = "download-ggml-model.cmd";
-
-    shell.exec(`${scriptPath} ${modelName}`);
-
-    // TODO: add check in case download-ggml-model doesn't return a successful download.
-    // to prevent continuing to compile; that makes it harder for user to see which script failed.
-
-    console.log("[whisper-node] Attempting to compile model...");
-
-    console.log
-
-    // move up directory, run make in whisper.cpp
-    shell.cd(path.resolve(modelPath, "../"));
-    // this has to run in whichever directory the model is located in??
-    shell.exec("UNAME_M=arm64 UNAME_p=arm LLAMA_NO_METAL=1 make");
-  
-  } catch (error) {
-    throw error;
-  }
-}
