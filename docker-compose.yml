@@ -4,6 +4,8 @@ services:
   loro:
     build:
       context: .
+    ports:
+      - 3010:3010
     depends_on:
       - whisper
 
