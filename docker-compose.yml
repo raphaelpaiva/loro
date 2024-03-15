@@ -3,7 +3,7 @@ version: "3.8"
 services:
   loro:
     build:
-      context: .
+      context: ./venom-http
     ports:
       - 3010:3010
     depends_on:

@@ -5,10 +5,13 @@
   "transcribe": true,
   "sessionName": "Loro",
   
-  "puppeteerArgs": {},
+  "puppeteerArgs": {
+    "executablePath": "/usr/bin/chromium"
+  },
 
   "whisperOptions": {
     "modelName": "small",
+    "modelDir": "node_modules/whisper-node/lib/whisper.cpp/models",
     "whisperOptions": {
       "gen_file_txt": true,
       "language": "auto"
@@ -16,7 +19,10 @@
   },
 
   "validGroups": [
-
+    "5521997139676@c.us",
+    "120363103086631400@g.us",
+    "5511996493028-1525458136@g.us",
+    "120363103086631400@g.us"
   ],
 
   "loroWisdom": [

@@ -12,14 +12,43 @@ const conf = loadConfig(path.resolve(__dirname, 'loro.json'));
 const header = "🦜 Currupaco!"
 
 const app = express();
+app.use(express.json());
 const port = 3010;
+let global_client = undefined;
+
 app.get('/', (req, resp) => {
-  resp.sendFile('/app/out.png');
+  const img_path = path.resolve(__dirname, 'out.png');
+  resp.sendFile(img_path);
 });
 
 app.get('/create', (req, resp) => {
-  createClient();
-  resp.send('Creating')
+  if (!global_client) {
+    createClient();
+    resp.send('Creating');
+  } else {
+    resp.send('Client already created');
+  }
+});
+
+app.post('/send', (req, resp) => {
+  if (!global_client) {
+    resp.status(500).send({message: "Client not initialized."});
+    return;
+  }
+
+  try {
+    let data = req.body;
+  
+    if (!data.content || !data.to) {
+      resp.status(400).json({message: "Both 'content' and 'to' fields must be specified."});
+      return;
+    }
+
+    sendMessage(global_client, data.to, data.content);
+    resp.json({message: `Sending "${data.content}" to ${data.to}`});
+  } catch (err) {
+    resp.status(400).json({message: "Could not decode body: " + err})
+  }
 });
 
 app.listen(port, () => {
@@ -65,6 +94,7 @@ function createClient() {
 }
 
 function start(client) {
+  global_client = client;
   client.onAnyMessage(async (message) => {
     if (!message.body?.includes(header)) {
       if (conf.logMessage) {
