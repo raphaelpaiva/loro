@@ -44,10 +44,14 @@ app.post('/send', (req, resp) => {
       return;
     }
 
-    sendMessage(global_client, data.to, data.content);
+    if (data.reply_to) {
+      sendReply(global_client, data.to, data.content, data.reply_to);
+    } else {
+      sendMessage(global_client, data.to, data.content);
+    }
     resp.json({message: `Sending "${data.content}" to ${data.to}`});
   } catch (err) {
-    resp.status(400).json({message: "Could not decode body: " + err})
+    resp.status(400).json({message: "Could not decode body: " + err});
   }
 });
 
