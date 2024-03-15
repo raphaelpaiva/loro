@@ -130,8 +130,8 @@ async function downloadMedia(message, client) {
     const buffer = await client.decryptFile(message);
 
     const fileExtension = mime.extension(message.mimetype);
-    const targetFileName = `media-from-${message.from}-${message.mediaKeyTimestamp}.${fileExtension}`;
-    const targetPath = path.resolve(__dirname, targetFileName);
+    const targetFileName = `${message.id}.${fileExtension}`;
+    const targetPath = path.resolve(__dirname, 'media', targetFileName);
     fs.writeFile(targetPath, buffer, (err) => {
       if (err) {
         console.error(err);
