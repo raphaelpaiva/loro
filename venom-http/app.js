@@ -87,8 +87,16 @@ function createClient() {
         }
       );
     },
-    undefined,
-    conf.puppeteerArgs,
+    (statusSession, session) => {
+      console.log(`[${session}] ${statusSession}`);
+    },
+    {
+      executablePath: "/usr/bin/chromium",
+      disableSpins: true,
+      disableWelcome: true,
+      updatesLog: false,
+      autoClose: 120000,
+    },
     undefined
     )
     .then((client) => start(client))
@@ -247,27 +255,29 @@ async function sendMessage(client, destination, text) {
 
 function loadConfig(filePath) {
   const defaultConf = {
-    "shareWisdom": true,
-    "downloadMedia": true,
-    "logMessage": true,
-    "transcribe": true,
-    "sessionName": "Loro",
+    shareWisdom: true,
+    downloadMedia: true,
+    logMessage: true,
+    transcribe: true,
+    sessionName: "Loro",
     
-    "puppeteerArgs": {},
+    venomArgs: {
+      disableSpins: true,
+    },
   
-    "whisperOptions": {
-      "modelName": "small",
-      "modelDir": `node_modules/whisper-node/lib/whisper.cpp/models`,
-      "whisperOptions": {
-        "gen_file_txt": true,
-        "language": "auto"
+    whisperOptions: {
+      modelName: "large-v3",
+      modelDir: `node_modules/whisper-node/lib/whisper.cpp/models`,
+      whisperOptions: {
+        gen_file_txt: true,
+        language: "auto"
       }
     },
   
-    "validGroups": [
+    validGroups: [
     ],
   
-    "loroWisdom": [
+    loroWisdom: [
       "A velocidade da luz é mais rápida do que a da escuridão.",
       "Se você tentar falhar e conseguir, falhou em falhar.",
       "O tempo voa, mas os relógios não têm asas.",
