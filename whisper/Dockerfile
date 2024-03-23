@@ -13,5 +13,5 @@ RUN git clone https://github.com/ggerganov/whisper.cpp.git /app
 # ENV LLAMA_NO_METAL=1
 RUN make -j server
 
-RUN /app/models/download-ggml-model.sh small
-CMD ["/app/server", "-l", "pt", "-m", "/app/models/ggml-small.bin", "--host", "0.0.0.0", "--port", "8099", "-ac", "512"]
+RUN /app/models/download-ggml-model.sh large-v3
+CMD ["/app/server", "-l", "pt", "-m", "/app/models/ggml-large-v3.bin", "--host", "0.0.0.0", "--port", "8099"]
