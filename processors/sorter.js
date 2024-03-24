@@ -1,42 +1,32 @@
-const amqp = require('amqplib');
+const Processor = require('./processor').Processor;
 
-const preprocess_queue = 'pre_process';
-const exchange = 'msgex';
-let globalConnection = undefined;
+class Sorter extends Processor {
+  constructor() {
+    super('pre_process');
+    this.exchange = 'msgex';
+    this.binds = [
+      {queue: 'log',        key: 'msg.#'},
+      {queue: 'persist',    key: 'msg.#'},
+      {queue: 'prompt',     key: 'msg.prompt.#'},
+      {queue: 'download',   key: 'msg.#.media'},
+      {queue: 'transcribe', key: 'msg.#.transcribe'},
+    ];
+  }
 
-async function main() {
-  console.log("[Sorter] Simbora");
-  const connection = await amqp.connect('amqp://queue:5672');
-  globalConnection = connection;
-  const channel = await connection.createChannel();
+  async bind() {
+    await this.channel.assertExchange(this.exchange, 'topic', {durable: true});
 
-  const binds = [
-    {queue: 'log',        key: 'msg.#'},
-    {queue: 'persist',    key: 'msg.#'},
-    {queue: 'prompt',     key: 'msg.prompt.#'},
-    {queue: 'download',   key: 'msg.#.media'},
-    {queue: 'transcribe', key: 'msg.#.transcribe'},
-  ];
+    this.binds.forEach(async (bind) => {
+      await this.channel.assertQueue(bind.queue, {durable: true});
+      await this.channel.bindQueue(bind.queue, this.exchange, bind.key);
+    });
+  }
 
-  await channel.assertQueue(preprocess_queue, {durable: true});
-  await channel.assertExchange(exchange, 'topic', {durable: true});
-
-  binds.forEach(async (bind) => {
-    await channel.assertQueue(bind.queue, {durable: true});
-    await channel.bindQueue(bind.queue, exchange, bind.key);
-  });
-
-  console.log('[Sorter] Registering consumer');
-  channel.consume(preprocess_queue, sortMessages(channel));
-}
-
-function sortMessages(channel) {
-  return (msg) => {
-    const zapMsg = JSON.parse(msg.content.toString());
+  consumer(message) {
+    const zapMsg = JSON.parse(message.content.toString());
     const isPrompt = zapMsg.type === 'chat' &&
-      !zapMsg.fromMe &&
-      !!zapMsg.body &&
-      zapMsg.body.toLowerCase().includes('loro');
+                    !!zapMsg.body &&
+                    zapMsg.body.toLowerCase().includes('loro');
     const isMedia = Object.keys(zapMsg.mediaData).length > 0;
 
     const classification = {
@@ -47,31 +37,37 @@ function sortMessages(channel) {
       body: zapMsg.body
     };
 
-    const label = genLabel(classification);
-    console.log('[Sorter]', classification, '=>', label);
+    const label = this.genLabel(classification);
+    this.log(`${JSON.stringify(classification)} => ${label}`);
 
-    channel.publish(exchange, label, msg.content);
+    this.channel.publish(this.exchange, label, message.content);
 
-    channel.ack(msg);
-  };
-}
-
-function genLabel(classification) {
-  let label = "msg"
-  label += classification.isPrompt ? ".prompt" : "";
-  label += classification.isMedia  ? ".media" : "";
-  label += classification.type === 'ptt' ? ".transcribe" : "";
-
-  return label;
-}
-
-process.on('SIGTERM', () => {
-  console.info('SIGTERM signal received.');
-
-  if (globalConnection) {
-    console.log('Closing queue connection');
-    globalConnection.close();
+    this.channel.ack(message);
   }
-});
 
-main();
+  genLabel(classification) {
+    let label = "msg"
+    label += classification.isPrompt ? ".prompt" : "";
+    label += classification.isMedia  ? ".media" : "";
+    label += classification.type === 'ptt' ? ".transcribe" : "";
+  
+    return label;
+  }
+}
+
+const sorter = new Sorter();
+try {
+  sorter.connect().then(
+    async () => {
+      await sorter.bind();
+      sorter.register();
+    }
+  );
+} catch (error) {
+  sorter.terminate();
+}
+  
+process.on('SIGTERM', () => {
+  sorter.log('SIGTERM signal received.');
+  sorter.terminate();
+});
