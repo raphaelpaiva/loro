@@ -1,17 +1,46 @@
 ---
 version: "3.8"
 services:
-  loro:
+  venom-http:
     build:
       context: ./venom-http
     ports:
       - 3010:3010
+    volumes:
+      - ./venom-http/media:/app/media
+      - ./venom-http/tokens:/app/tokens
+      - ./venom-http/app.js:/app/app.js
+      - ./venom-http/loro.json:/app/loro.json
     depends_on:
+      - queue
       - whisper
-
+  sorter:
+    build:
+      context: ./processors
+    depends_on:
+      - queue
+    command: ["node", "sorter.js"]
+  logger:
+    build:
+      context: ./processors
+    volumes:
+      - log:/app/log
+      - ./log:/app/log
+    depends_on:
+      - queue
+    command: ["node", "logger.js"]
+  queue:
+    image: rabbitmq:management-alpine
+    ports:
+      - 15672:15672
+      - 25672:5672
+    volumes:
+      - qv:/var/lib/rabbitmq
   whisper:
     build:
       context: ./whisper
     ports:
       - 8099:8099
-    
+volumes:
+  qv:
+  log:
