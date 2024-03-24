@@ -8,7 +8,6 @@ services:
       - 3010:3010
     volumes:
       - ./venom-http/media:/app/media
-      - ./venom-http/tokens:/app/tokens
       - ./venom-http/app.js:/app/app.js
       - ./venom-http/loro.json:/app/loro.json
     depends_on:
@@ -29,6 +28,15 @@ services:
     depends_on:
       - queue
     command: ["node", "logger.js"]
+  downloader:
+    build:
+      context: ./processors
+    volumes:
+      - media:/app/media
+      - ./media:/app/media
+    depends_on:
+      - queue
+    command: ["node", "mediaDownloader.js"]
   queue:
     image: rabbitmq:management-alpine
     ports:
@@ -44,3 +52,4 @@ services:
 volumes:
   qv:
   log:
+  media:
