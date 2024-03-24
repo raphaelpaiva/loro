@@ -6,59 +6,17 @@ const path         = require('path');
 const ffmpeg       = require('fluent-ffmpeg');
 const request      = require('request');
 const express      = require('express');
+const amqplib      = require('amqplib');
 
+const queueServerURL = 'amqp://queue:5672'
+let queueServerConnection = undefined;
 const conf = loadConfig(path.resolve(__dirname, 'loro.json'));
-
 const header = "🦜 Currupaco!"
 
-const app = express();
-app.use(express.json());
-const port = 3010;
 let global_client = undefined;
 
-app.get('/', (req, resp) => {
-  const img_path = path.resolve(__dirname, 'out.png');
-  resp.sendFile(img_path);
-});
-
-app.get('/create', (req, resp) => {
-  if (!global_client) {
-    createClient();
-    resp.send('Creating');
-  } else {
-    resp.send('Client already created');
-  }
-});
-
-app.post('/send', (req, resp) => {
-  if (!global_client) {
-    resp.status(500).send({message: "Client not initialized."});
-    return;
-  }
-
-  try {
-    let data = req.body;
-  
-    if (!data.content || !data.to) {
-      resp.status(400).json({message: "Both 'content' and 'to' fields must be specified."});
-      return;
-    }
-
-    if (data.reply_to) {
-      sendReply(global_client, data.to, data.content, data.reply_to);
-    } else {
-      sendMessage(global_client, data.to, data.content);
-    }
-    resp.json({message: `Sending "${data.content}" to ${data.to}`});
-  } catch (err) {
-    resp.status(400).json({message: "Could not decode body: " + err});
-  }
-});
-
-app.listen(port, () => {
-  console.log(`Listening on port ${port}`);
-});
-
+const app = express();
+createServer();
 createClient();
 
 function createClient() {
@@ -108,11 +66,8 @@ function createClient() {
 function start(client) {
   global_client = client;
   client.onAnyMessage(async (message) => {
+    sendToPreProcessQueue(message);
     if (!message.body?.includes(header)) {
-      if (conf.logMessage) {
-        logMessage(message);
-      }
-  
       if (conf.downloadMedia) {
         downloadMedia(message, client);
       }
@@ -460,3 +415,69 @@ function loadConfig(filePath) {
   return Object.assign(defaultConf, confFromFile);
 }
 
+function createServer() {
+  app.use(express.json());
+  const port = 3010;
+
+  app.get('/', (req, resp) => {
+    const img_path = path.resolve(__dirname, 'out.png');
+    resp.sendFile(img_path);
+  });
+
+  app.get('/create', (req, resp) => {
+    if (!global_client) {
+      createClient();
+      resp.send('Creating');
+    } else {
+      resp.send('Client already created');
+    }
+  });
+
+  app.post('/send', (req, resp) => {
+    if (!global_client) {
+      resp.status(500).send({ message: "Client not initialized." });
+      return;
+    }
+
+    try {
+      let data = req.body;
+
+      if (!data.content || !data.to) {
+        resp.status(400).json({ message: "Both 'content' and 'to' fields must be specified." });
+        return;
+      }
+
+      if (data.reply_to) {
+        sendReply(global_client, data.to, data.content, data.reply_to);
+      } else {
+        sendMessage(global_client, data.to, data.content);
+      }
+      resp.json({ message: `Sending "${data.content}" to ${data.to}` });
+    } catch (err) {
+      resp.status(400).json({ message: "Could not decode body: " + err });
+    }
+  });
+
+  app.listen(port, () => {
+    console.log(`Listening on port ${port}`);
+  });
+}
+
+async function sendToPreProcessQueue(message) {
+  let connection = undefined;
+  if (!queueServerConnection) {
+    console.log(`Reconnecting to ${queueServerURL}.`);
+    connection = await amqplib.connect(queueServerURL);
+    queueServerConnection = connection;
+  } else {
+    connection = queueServerConnection;
+  }
+
+  const channel = await connection.createChannel();
+
+  const queueName = 'pre_process';
+  await channel.assertQueue(queueName, {durable: true});
+  channel.sendToQueue(queueName, Buffer.from(JSON.stringify(message)));
+  await channel.close();
+  console.log(`Sent message ${message.id} to ${queueName}`)
+}
