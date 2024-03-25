@@ -8,35 +8,55 @@ services:
       - 3010:3010
     volumes:
       - ./venom-http/media:/app/media
-      - ./venom-http/app.js:/app/app.js
       - ./venom-http/loro.json:/app/loro.json
     depends_on:
-      - queue
-      - whisper
+      queue:
+        condition: service_healthy
+        restart: true
+      whisper:
+        condition: service_started
+    restart: unless-stopped
   sorter:
     build:
       context: ./processors
     depends_on:
-      - queue
+      queue:
+        condition: service_healthy
+        restart: true
     command: ["node", "sorter.js"]
   logger:
     build:
       context: ./processors
+    command: ["node", "logger.js"]
     volumes:
       - log:/app/log
       - ./log:/app/log
     depends_on:
-      - queue
-    command: ["node", "logger.js"]
+      queue:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
   downloader:
     build:
       context: ./processors
+    command: ["node", "mediaDownloader.js"]
     volumes:
       - media:/app/media
       - ./media:/app/media
     depends_on:
-      - queue
-    command: ["node", "mediaDownloader.js"]
+      queue:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+  prompt:
+    build:
+      context: ./processors
+    command: ["node", "prompt.js"]
+    depends_on:
+      queue:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
   queue:
     image: rabbitmq:management-alpine
     ports:
@@ -44,11 +64,14 @@ services:
       - 25672:5672
     volumes:
       - qv:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -antp | grep 5672"]
   whisper:
     build:
       context: ./whisper
     ports:
       - 8099:8099
+    restart: unless-stopped
 volumes:
   qv:
   log:
