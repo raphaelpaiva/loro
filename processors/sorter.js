@@ -40,7 +40,7 @@ class Sorter extends Processor {
     const label = this.genLabel(classification);
     this.log(`${JSON.stringify(classification)} => ${label}`);
 
-    this.channel.publish(this.exchange, label, message.content);
+    this.channel.publish(this.exchange, label, message.content, {persistent: true});
 
     this.channel.ack(message);
   }
