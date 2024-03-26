@@ -1,7 +1,6 @@
 const fs        = require('node:fs');
 const path      = require('path');
 const mime      = require('mime-types');
-const axios     = require('axios');
 const Processor = require('./processor').Processor;
 
 class MediaDownloader extends Processor {
@@ -19,28 +18,17 @@ class MediaDownloader extends Processor {
     const fileExtension = mime.extension(zapMsg.mimetype);
     const targetFileName = `${zapMsg.id}.${fileExtension}`;
     const targetPath = path.resolve(__dirname, 'media', targetFileName);
-    const writer = fs.createWriteStream(targetPath);
     
     this.log(`Downloading to ${targetPath}`);
     try {
-      const response = await axios('http://venom-http:3010/media',{
-        method: 'POST',
-        responseType: 'stream',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        data: zapMsg
-      });
-      response.data.pipe(writer);
-      response.data.on('end', () => {
-        this.log(`Successfully downloaded ${targetFileName}`);
-        this.channel.ack(message);
-      })
-      writer.on('error', err => {
-        this.log(`Error writing ${targetFileName}: ${err}`);
-        this.channel.nack(message);
-        writer.close();
-      });
+      if(!!zapMsg.fileBase64Buffer) {
+        const buf = Buffer.from(zapMsg.fileBase64Buffer, 'base64');
+        fs.writeFileSync(targetPath, buf);
+      } else {
+        this.log(`Rejecting message ${zapMsg.id}. Reason: fileBase64Buffer is not set.`);
+      }
+      this.channel.ack(message);
+      this.log(`Successfully downloaded ${targetPath}`);
     } catch(err) {
       this.log(`Error downloading ${targetFileName}: ${err}`);
       this.channel.nack(message);

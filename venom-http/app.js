@@ -67,11 +67,12 @@ async function createClient() {
 function start(client) {
   global_client = client;
   client.onAnyMessage(async (message) => {
-    sendToPreProcessQueue(message);
     if (!message.body?.includes(header)) {
       if (conf.downloadMedia) {
         downloadMedia(message, client);
       }
+    } else {
+      sendToPreProcessQueue(message);
     }
   });
   client.onMessage((message) => {});
@@ -96,6 +97,9 @@ async function downloadMedia(message, client) {
     const fileExtension = mime.extension(message.mimetype);
     const targetFileName = `${message.id}.${fileExtension}`;
     const targetPath = path.resolve(__dirname, 'media', targetFileName);
+    message.fileBase64Buffer = buffer.toString('base64');
+    sendToPreProcessQueue(message);
+
     fs.writeFile(targetPath, buffer, (err) => {
       if (err) {
         console.error(err);
