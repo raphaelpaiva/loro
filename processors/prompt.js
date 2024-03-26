@@ -3,7 +3,7 @@ const Processor = require('./processor').Processor;
 class Prompt extends Processor {
   constructor() {
     super('prompt');
-    this.outputQueueName = 'reply';
+    this.outputQueueName = 'send';
     this.loroWisdom = [
       "A velocidade da luz é mais rápida do que a da escuridão.",
       "Se você tentar falhar e conseguir, falhou em falhar.",
