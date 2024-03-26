@@ -18,8 +18,9 @@ let global_client = undefined;
 const app = express();
 createServer();
 createClient();
+registerConsumer();
 
-function createClient() {
+async function createClient() {
   venom.create(
     conf.sessionName,
     (base64Qr, asciiQR) => {
@@ -71,10 +72,6 @@ function start(client) {
       if (conf.downloadMedia) {
         downloadMedia(message, client);
       }
-  
-      if (conf.shareWisdom) {
-        shareWisdom(message, client);
-      }
     }
   });
   client.onMessage((message) => {});
@@ -112,6 +109,8 @@ async function downloadMedia(message, client) {
         }
       }
     });
+
+    
   }
 }
 
@@ -426,6 +425,20 @@ function createServer() {
 
   app.get('/create', (req, resp) => {
     if (!global_client) {
+      const sessionDir = path.resolve(__dirname, 'tokens', conf.sessionName);
+      console.log('Removing', sessionDir);
+      fs.rmdirSync(sessionDir, {force: true, recursive: true});
+      createClient();
+      resp.send('Creating');
+    } else {
+      resp.send('Client already created');
+    }
+  });
+
+
+  app.get('/force', (req, resp) => {
+    
+    if (!global_client) {
       createClient();
       resp.send('Creating');
     } else {
@@ -458,6 +471,32 @@ function createServer() {
     }
   });
 
+  app.get('/status', (req, resp) => {
+    if (!!global_client) {
+      resp.status(200).json({status: 'Ok'});
+    } else {
+      resp.status(500).json({status: 'Error'});
+    }
+  })
+
+  app.post('/media', (req, resp) => {
+    const message = req.body;
+
+    if (!global_client) {
+      resp.status(500).json({ message: 'Client not initialized' });
+    }
+
+    const fileExtension = mime.extension(message.mimetype);
+    const targetFileName = `${message.id}.${fileExtension}`;
+    const mediaPath = path.resolve(__dirname, 'media', targetFileName);
+
+    if (!fs.existsSync(mediaPath)) {
+      downloadMedia(message, global_client);  
+    }
+
+    resp.sendFile(mediaPath);
+  });
+
   app.listen(port, () => {
     console.log(`Listening on port ${port}`);
   });
@@ -480,4 +519,39 @@ async function sendToPreProcessQueue(message) {
   channel.sendToQueue(queueName, Buffer.from(JSON.stringify(message)));
   await channel.close();
   console.log(`Sent message ${message.id} to ${queueName}`)
+}
+
+async function registerConsumer(message) {
+  let connection = undefined;
+  if (!queueServerConnection) {
+    console.log(`Reconnecting to ${queueServerURL}.`);
+    connection = await amqplib.connect(queueServerURL);
+    queueServerConnection = connection;
+  } else {
+    connection = queueServerConnection;
+  }
+
+  const channel = await connection.createChannel();
+
+  const queueName = 'send';
+  await channel.assertQueue(queueName, {durable: true});
+  
+  console.log(`Registering ${queueName} consumer...`);
+  channel.consume(this.queueName, (msg) => {
+    try {
+      if (!!global_client) {
+        const envelope = JSON.parse(msg.content.toString());
+        if (!!envelope.reply_to) {
+          sendReply(global_client, envelope.to, envelope.content, envelope.reply_to);
+        } else {
+          sendMessage(global_client, envelope.to, envelope.content);
+        }
+        channel.ack(msg);
+      } else {
+        console.log('Client not initialized');
+      }
+    } catch (error) {
+      console.error(`Error consuming ${queueName}:`, error);
+    }
+  });
 }
