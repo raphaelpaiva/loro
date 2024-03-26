@@ -68,11 +68,13 @@ function start(client) {
   global_client = client;
   client.onAnyMessage(async (message) => {
     if (!message.body?.includes(header)) {
-      if (conf.downloadMedia) {
+      let isMedia = !(Object.keys(message.mediaData).length === 0);
+      
+      if (isMedia === true || message.isMMS === true) {
         downloadMedia(message, client);
+      } else {
+        sendToPreProcessQueue(message);
       }
-    } else {
-      sendToPreProcessQueue(message);
     }
   });
   client.onMessage((message) => {});
@@ -89,33 +91,27 @@ async function logMessage(message) {
 }
 
 async function downloadMedia(message, client) {
-  let isMedia = !(Object.keys(message.mediaData).length === 0);
+  const buffer = await client.decryptFile(message);
 
-  if (isMedia === true || message.isMMS === true) {
-    const buffer = await client.decryptFile(message);
+  const fileExtension = mime.extension(message.mimetype);
+  const targetFileName = `${message.id}.${fileExtension}`;
+  const targetPath = path.resolve(__dirname, 'media', targetFileName);
+  message.fileBase64Buffer = buffer.toString('base64');
+  sendToPreProcessQueue(message);
 
-    const fileExtension = mime.extension(message.mimetype);
-    const targetFileName = `${message.id}.${fileExtension}`;
-    const targetPath = path.resolve(__dirname, 'media', targetFileName);
-    message.fileBase64Buffer = buffer.toString('base64');
-    sendToPreProcessQueue(message);
-
-    fs.writeFile(targetPath, buffer, (err) => {
-      if (err) {
-        console.error(err);
-      } else {
-        console.log('Successfully wrote', targetPath);
-        if (conf.transcribe && mime.extension(message.mimetype) === 'oga') {
-          transcribe(targetPath,(text => {
-            let destination = resolveDestination(message);
-            sendReply(client, destination, `*Transcrição do Áudio:*\n_"${text.trim()}"_`, message.id);
-          }));
-        }
+  fs.writeFile(targetPath, buffer, (err) => {
+    if (err) {
+      console.error(err);
+    } else {
+      console.log('Successfully wrote', targetPath);
+      if (conf.transcribe && mime.extension(message.mimetype) === 'oga') {
+        transcribe(targetPath,(text => {
+          let destination = resolveDestination(message);
+          sendReply(client, destination, `*Transcrição do Áudio:*\n_"${text.trim()}"_`, message.id);
+        }));
       }
-    });
-
-    
-  }
+    }
+  });
 }
 
 async function shareWisdom(message, client) {
