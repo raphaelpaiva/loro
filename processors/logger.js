@@ -2,21 +2,19 @@ const fs   = require('node:fs');
 const path = require('path');
 const Processor = require('./processor').Processor;
 
-const logPath = path.resolve(__dirname, 'log');
-
 class Logger extends Processor {
   constructor() {
     super('log');
     this.logPath = path.resolve(__dirname, 'log');
-    if (!fs.existsSync(logPath)) {
-      this.log(`Creating path ${logPath}`)
-      fs.mkdirSync(logPath);
+    if (!fs.existsSync(this.logPath)) {
+      this.log(`Creating path ${this.logPath}`)
+      fs.mkdirSync(this.logPath);
     }
   }
 
   consumer(message) {
     try {
-      const logFile = path.resolve(logPath, 'message.log');
+      const logFile = path.resolve(this.logPath, 'message.log');
       const zapMsg = JSON.parse(message.content.toString());
       const messageString = JSON.stringify(zapMsg);
       fs.appendFile(logFile, `\n${messageString}`, function (err) {
