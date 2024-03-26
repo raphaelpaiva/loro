@@ -237,7 +237,7 @@ class Prompt extends Processor {
   resolveDestination(zapMsg) {
     let destination = zapMsg.from;
   
-    if (zapMsg.isGroupMsg && conf.validGroups.includes(zapMsg.groupInfo.id)) {
+    if (zapMsg.isGroupMsg) {
       destination = zapMsg.groupInfo.id;
     }
   
