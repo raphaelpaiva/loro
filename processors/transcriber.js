@@ -30,39 +30,50 @@ class Transcriber extends Processor {
       const transcriber = this;
       
       if(!!zapMsg.fileBase64Buffer) {
-        this.log(`Transcribing ${zapMsg.id}`);
-        const buf = Buffer.from(zapMsg.fileBase64Buffer, 'base64');
-        fs.writeFileSync(originalFilePath, buf);
-        console.log(`Converting ${originalFilePath} to ${outputFilePath}`);
-        ffmpeg().input(originalFilePath)
-          .audioChannels(1)
-          .withAudioFrequency(16000)
-          .output(outputFilePath)
-          .on('end', () => {
-            console.log(`ffmpeg wrote ${outputFilePath}`);
-            
-            const readStream = fs.createReadStream(outputFilePath);
-            
-            const req = request.post('http://whisper:8099/inference', function (err, resp, body) {
-              if (err) {
-                console.log('Error!', err);
-              } else {
-                const transcript = JSON.parse(body);
-                transcriber.sendTranscript(message, zapMsg, transcript);
-                fs.rm(originalFilePath, () => {});
-                fs.rm(outputFilePath, () => {});
-                console.log('URL: ', transcript);
+        try {
+          this.log(`Transcribing ${zapMsg.id}`);
+          const buf = Buffer.from(zapMsg.fileBase64Buffer, 'base64');
+          fs.writeFileSync(originalFilePath, buf);
+          console.log(`Converting ${originalFilePath} to ${outputFilePath}`);
+          ffmpeg().input(originalFilePath)
+            .audioChannels(1)
+            .withAudioFrequency(16000)
+            .output(outputFilePath)
+            .on('end', () => {
+              console.log(`ffmpeg wrote ${outputFilePath}`);
+              
+              const readStream = fs.createReadStream(outputFilePath);
+              
+              const req = request.post('http://whisper:8099/inference', function (err, resp, body) {
+                if (err) {
+                  console.log('Error!', err);
+                } else {
+                  const transcript = JSON.parse(body);
+                  transcriber.sendTranscript(message, zapMsg, transcript);
+                  fs.rm(originalFilePath, () => {});
+                  fs.rm(outputFilePath, () => {});
+                  console.log('URL: ', transcript);
+                }
+              });
+  
+  
+              const form = req.form();
+              form.append('file', readStream);
+              form.append("temperature", "0.0");
+              form.append("temperature_inc", "0.2");
+              form.append("response_format", "json");
+            })
+            .on('error', (err) => {
+              transcriber.log(`Error converting ${zapMsg.id}: ${err}`);
+              if (err.toString().includes('Invalid data found when processing input')) {
+                transcriber.log(`Dropping message ${zapMsg.id} due to unrecoverable error.`);
+                transcriber.channel.ack(message);
               }
-            });
-
-
-            const form = req.form();
-            form.append('file', readStream);
-            form.append("temperature", "0.0");
-            form.append("temperature_inc", "0.2");
-            form.append("response_format", "json");
-          })
-          .run();
+            })
+            .run();
+        } catch (error) {
+          this.log(`Error transcribing ${zapMsg.id}: ${error}`);
+        }
       } else {
         this.log(`Rejecting message ${zapMsg.id}. Reason: fileBase64Buffer is not set.`);
         this.channel.ack(message);
