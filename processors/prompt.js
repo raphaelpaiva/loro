@@ -226,26 +226,8 @@ class Prompt extends Processor {
     }
   }
 
-  reply(response) {
-    this.channel.sendToQueue(this.outputQueueName, Buffer.from(JSON.stringify(response)), {persistent: true});
-  }
-
   chooseWisdom() {
     return this.loroWisdom[Math.floor(Math.random() * this.loroWisdom.length)];
-  }
-
-  resolveDestination(zapMsg) {
-    let destination = zapMsg.from;
-  
-    if (zapMsg.isGroupMsg) {
-      destination = zapMsg.groupInfo.id;
-    }
-  
-    if (zapMsg.fromMe) {
-      destination = zapMsg.to;
-    }
-  
-    return destination;
   }
 }
 

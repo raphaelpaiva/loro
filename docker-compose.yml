@@ -57,6 +57,16 @@ services:
         condition: service_healthy
         restart: true
     restart: unless-stopped
+  transcriber:
+    build:
+      context: ./processors
+      dockerfile: Dockerfile.transcriber
+    command: ["node", "transcriber.js"]
+    depends_on:
+      queue:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
   queue:
     image: rabbitmq:management-alpine
     ports:

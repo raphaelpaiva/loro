@@ -7,6 +7,7 @@ class Processor {
     this.queueName = queueName;
     this.connection = undefined;
     this.channel = undefined;
+    this.outputQueueName = 'send'
     // this.connect();
   }
 
@@ -37,6 +38,23 @@ class Processor {
       this.log('Closing queue connection');
       this.connection.close();
     }
+  }
+
+  resolveDestination(zapMsg) {
+    let destination = zapMsg.from;
+  
+    if (zapMsg.isGroupMsg) {
+      destination = zapMsg.groupInfo.id;
+    }
+  
+    if (zapMsg.fromMe) {
+      destination = zapMsg.to;
+    }
+  
+    return destination;
+  }
+  reply(response) {
+    this.channel.sendToQueue(this.outputQueueName, Buffer.from(JSON.stringify(response)), {persistent: true});
   }
 }
 
