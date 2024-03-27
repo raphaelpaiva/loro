@@ -13,8 +13,6 @@ services:
       queue:
         condition: service_healthy
         restart: true
-      whisper:
-        condition: service_started
     restart: unless-stopped
   sorter:
     build:
@@ -66,6 +64,8 @@ services:
       queue:
         condition: service_healthy
         restart: true
+      whisper:
+        condition: service_started
     restart: unless-stopped
   queue:
     image: rabbitmq:management-alpine
