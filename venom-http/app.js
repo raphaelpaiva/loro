@@ -88,7 +88,8 @@ function start(client) {
       let isMedia = !(Object.keys(message.mediaData).length === 0);
       
       if (isMedia === true || message.isMMS === true) {
-        const buffer = downloadMedia(message, client);
+        console.log(`Downloading media from message ${message.id}`);
+        const buffer = await downloadMedia(message, client);
         message.fileBase64Buffer = buffer.toString('base64');
       }
 
