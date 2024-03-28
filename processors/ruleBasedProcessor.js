@@ -1,20 +1,48 @@
 const Processor = require('./processor').Processor;
+const path = require('path');
+const fs = require('fs');
 
 class RuleBased extends Processor {
   constructor() {
     super('zoa');
     this.exchange = 'msgex';
     this.outputQueueName = 'send';
+    this.rulesFile = path.resolve(__dirname, 'rules.js');
+    this.rules = [];
+    
+    this.loadRules();
+    fs.watchFile(this.rulesFile, (curr, prev) => {
+      if (curr.mtimeMs > prev.mtimeMs) {
+        this.log(`Reloading ${this.rulesFile}`);
+        this.loadRules();
+      }
+    });
+  }
+
+  loadRules() {
+    let newRules = undefined;
     try {
-      this.rules = require('./rules');
+      delete require.cache[this.rulesFile];
+      newRules = require(this.rulesFile);
+
+      if (!!newRules) {
+        this.rules = newRules;
+      }
+
       this.log(`Loaded ${this.rules.length} rules:`);
-      this.rules.forEach(element => {
-        this.log(`  - ${element.name}`);
-      });
+      this.logRules();
     } catch(error) {
-      this.rules = new Array();
-      this.log(`Could not load any rules. Check rules.js`);
+      this.log(`Could not load rules: ${error}`);
+      this.log(`Rules not reloaded. Current rules are still in place:`);
+      this.logRules();
     }
+
+  }
+
+  logRules() {
+    this.rules.forEach(element => {
+      this.log(`  - ${element.name}`);
+    });
   }
 
   async bind() {
@@ -80,7 +108,7 @@ class RuleBased extends Processor {
 
     let regexMatch = null;
     if (!!matcher.regex) {
-      regexMatch = zapMsg.body?.toLowerCase().trim().normalize('NFD')
+      regexMatch = zapMsg.body?.trim().normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '').match(matcher.regex);
       result.matchesRegex = !!regexMatch;
     }
