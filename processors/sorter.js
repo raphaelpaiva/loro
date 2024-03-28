@@ -24,16 +24,12 @@ class Sorter extends Processor {
 
   consumer(message) {
     const zapMsg = JSON.parse(message.content.toString());
-    const isPrompt = zapMsg.type === 'chat' &&
-                    !!zapMsg.body &&
-                    zapMsg.body.toLowerCase().includes('loro');
     const isMedia = Object.keys(zapMsg.mediaData).length > 0;
 
     const classification = {
       id: zapMsg.id,
       type: zapMsg.type,
       isMedia: isMedia,
-      isPrompt: isPrompt,
       body: zapMsg.body
     };
 
@@ -47,7 +43,6 @@ class Sorter extends Processor {
 
   genLabel(classification) {
     let label = "msg"
-    label += classification.isPrompt ? ".prompt" : "";
     label += classification.isMedia  ? ".media" : "";
     label += classification.type === 'ptt' ? ".transcribe" : "";
   

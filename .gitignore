@@ -5,3 +5,4 @@ media/
 message.log
 *.log
 *.png
+rules.js
