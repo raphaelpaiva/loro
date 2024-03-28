@@ -70,6 +70,7 @@ services:
     restart: unless-stopped
   queue:
     image: rabbitmq:management-alpine
+    hostname: queue-server
     ports:
       - 15672:15672
       - 25672:5672
