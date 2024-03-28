@@ -31,7 +31,7 @@ class RuleBased extends Processor {
         const match = this.matches(rule, zapMsg);
         
         if (match.matches) {
-          const responseText = this.fetchResponse(rule.response);
+          const responseText = this.fetchResponse(rule.response, match.regexMatch);
           this.log(`Rule ${rule.name} matches ${zapMsg.id}(${zapMsg.body})! Responding with ${responseText}`);
           const response = {
             to: this.resolveDestination(zapMsg),
@@ -78,17 +78,21 @@ class RuleBased extends Processor {
       result.matchesSender = true;
     }
 
+    let regexMatch = null;
     if (!!matcher.regex) {
-      result.matchesRegex = !!zapMsg.body?.toLowerCase().trim().match(matcher.regex);
+      regexMatch = zapMsg.body?.toLowerCase().trim().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').match(matcher.regex);
+      result.matchesRegex = !!regexMatch;
     }
 
     return {
       reason: result,
-      matches: result.matchesGroup && result.matchesRegex && result.matchesGroup
+      matches: result.matchesGroup && result.matchesRegex && result.matchesGroup,
+      regexMatch: regexMatch
     }
   }
   
-  fetchResponse(response) {
+  fetchResponse(response, regexMatch) {
     if (typeof response === 'string') {
       return response;
     }
@@ -98,7 +102,7 @@ class RuleBased extends Processor {
     }
 
     if (typeof response === 'function') {
-      return response();
+      return response(regexMatch);
     }
   }
 }
