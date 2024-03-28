@@ -1,17 +1,90 @@
 ---
 version: "3.8"
 services:
-  loro:
+  venom-http:
     build:
       context: ./venom-http
     ports:
       - 3010:3010
+    volumes:
+      - ./venom-http/media:/app/media
+      - ./venom-http/loro.json:/app/loro.json
     depends_on:
-      - whisper
-
+      queue:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+  sorter:
+    build:
+      context: ./processors
+    depends_on:
+      queue:
+        condition: service_healthy
+        restart: true
+    command: ["node", "sorter.js"]
+  rule_processor:
+    build:
+      context: ./processors
+    volumes:
+      - ./rules.js:/app/rules.js
+    depends_on:
+      queue:
+        condition: service_healthy
+        restart: true
+    command: ["node", "ruleBasedProcessor"]  
+  logger:
+    build:
+      context: ./processors
+    command: ["node", "logger.js"]
+    volumes:
+      - log:/app/log
+      - ./log:/app/log
+    depends_on:
+      queue:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+  downloader:
+    build:
+      context: ./processors
+    command: ["node", "mediaDownloader.js"]
+    volumes:
+      - media:/app/media
+      - ./media:/app/media
+    depends_on:
+      queue:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+  transcriber:
+    build:
+      context: ./processors
+      dockerfile: Dockerfile.transcriber
+    command: ["node", "transcriber.js"]
+    depends_on:
+      queue:
+        condition: service_healthy
+        restart: true
+      whisper:
+        condition: service_started
+    restart: unless-stopped
+  queue:
+    image: rabbitmq:management-alpine
+    hostname: queue-server
+    ports:
+      - 15672:15672
+      - 25672:5672
+    volumes:
+      - qv:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -antp | grep 5672"]
   whisper:
     build:
       context: ./whisper
     ports:
       - 8099:8099
-    
+    restart: unless-stopped
+volumes:
+  qv:
+  log:
+  media:
