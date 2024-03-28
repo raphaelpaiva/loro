@@ -233,11 +233,6 @@ class Prompt extends Processor {
 
 const prompt = new Prompt();
 
-process.on('SIGTERM', () => {
-  prompt.log('SIGTERM signal received.');
-  prompt.terminate();
-});
-
 try {
   prompt.connect().then(
     () => prompt.register()

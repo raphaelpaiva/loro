@@ -8,7 +8,13 @@ class Processor {
     this.connection = undefined;
     this.channel = undefined;
     this.outputQueueName = 'send'
-    // this.connect();
+
+    new Array('SIGTERM', 'SIGINT').forEach(signal => {
+      process.on(signal, () => {
+        this.log(`${signal} received.`);
+        this.terminate();
+      });
+    });
   }
 
   async connect() {

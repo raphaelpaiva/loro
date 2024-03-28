@@ -44,8 +44,3 @@ try {
 } catch (error) {
   downloader.terminate();
 }
-  
-process.on('SIGTERM', () => {
-  downloader.log('SIGTERM signal received.');
-  downloader.terminate();
-});

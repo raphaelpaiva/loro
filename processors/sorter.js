@@ -66,8 +66,3 @@ try {
 } catch (error) {
   sorter.terminate();
 }
-  
-process.on('SIGTERM', () => {
-  sorter.log('SIGTERM signal received.');
-  sorter.terminate();
-});

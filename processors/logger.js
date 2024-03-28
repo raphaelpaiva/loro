@@ -39,8 +39,4 @@ try {
 } catch (error) {
   logger.terminate();
 }
-  
-process.on('SIGTERM', () => {
-  logger.log('SIGTERM signal received.');
-  logger.terminate();
-});
+

@@ -118,8 +118,3 @@ try {
 } catch (error) {
   transcriber.terminate();
 }
-  
-process.on('SIGTERM', () => {
-  transcriber.log('SIGTERM signal received.');
-  transcriber.terminate();
-});
