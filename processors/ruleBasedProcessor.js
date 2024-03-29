@@ -7,7 +7,7 @@ class RuleBased extends Processor {
     super('zoa');
     this.exchange = 'msgex';
     this.outputQueueName = 'send';
-    this.rulesFile = path.resolve(__dirname, 'rules.js');
+    this.rulesFile = path.resolve(__dirname, 'rules', 'rules.js');
     this.rules = [];
     
     this.loadRules();
@@ -51,7 +51,7 @@ class RuleBased extends Processor {
     await this.channel.assertQueue(this.outputQueueName, {durable: true})
   }
 
-  consumer(message) {
+  async consumer(message) {
     const zapMsg = JSON.parse(message.content.toString());
     
     try {
@@ -59,7 +59,7 @@ class RuleBased extends Processor {
         const match = this.matches(rule, zapMsg);
         
         if (match.matches) {
-          const responseText = this.fetchResponse(rule.response, match.regexMatch);
+          const responseText = await this.fetchResponse(rule.response, match.regexMatch);
           this.log(`Rule ${rule.name} matches ${zapMsg.id}(${zapMsg.body})! Responding with ${responseText}`);
           const response = {
             to: this.resolveDestination(zapMsg),
@@ -120,7 +120,7 @@ class RuleBased extends Processor {
     }
   }
   
-  fetchResponse(response, regexMatch) {
+  async fetchResponse(response, regexMatch) {
     if (typeof response === 'string') {
       return response;
     }
@@ -130,7 +130,7 @@ class RuleBased extends Processor {
     }
 
     if (typeof response === 'function') {
-      return response(regexMatch);
+      return await response(regexMatch);
     }
   }
 }

@@ -26,7 +26,7 @@ services:
     build:
       context: ./processors
     volumes:
-      - ./rules.js:/app/rules.js
+      - ./rules:/app/rules/
     depends_on:
       queue:
         condition: service_healthy
