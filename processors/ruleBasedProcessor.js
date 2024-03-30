@@ -60,6 +60,12 @@ class RuleBased extends Processor {
         
         if (match.matches) {
           const responseText = await this.fetchResponse(rule.response, match.regexMatch);
+
+          if (!responseText) {
+            this.log(`${rule.name} matched ${zapMsg.id}(${zapMsg.body}), but response was ${responseText}. Rejecting.`);
+            continue;
+          }
+
           this.log(`Rule ${rule.name} matches ${zapMsg.id}(${zapMsg.body})! Responding with ${responseText}`);
           const response = {
             to: this.resolveDestination(zapMsg),
