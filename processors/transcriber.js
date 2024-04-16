@@ -32,7 +32,7 @@ class Transcriber extends Processor {
       if(!!zapMsg.fileBase64Buffer) {
         try {
           this.log(`Transcribing ${zapMsg.id}`);
-          const buf = Buffer.from(zapMsg.fileBase64Buffer, 'base64');
+          const buf = this.parseBuffer(zapMsg);
           fs.writeFileSync(originalFilePath, buf);
           console.log(`Converting ${originalFilePath} to ${outputFilePath}`);
           ffmpeg().input(originalFilePath)
@@ -84,6 +84,15 @@ class Transcriber extends Processor {
     }
   }
   
+  parseBuffer(zapMsg) {
+    const target = ';base64';
+    const targetIndex = zapMsg.fileBase64Buffer.indexOf(target);
+    const skipLength = targetIndex > 0 ? targetIndex + target.length : 0;
+
+    const data = zapMsg.fileBase64Buffer.substring(skipLength);
+    return Buffer.from(data, 'base64');
+  }
+
   async sendTranscript(message, zapMsg, transcript) {
     this.reply({
       to: this.resolveDestination(zapMsg),
