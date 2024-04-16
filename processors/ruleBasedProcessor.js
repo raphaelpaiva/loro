@@ -52,6 +52,9 @@ class RuleBased extends Processor {
   }
 
   async consumer(message) {
+    if (!message.content) {
+      return;
+    }
     const zapMsg = JSON.parse(message.content.toString());
     
     try {
@@ -86,6 +89,7 @@ class RuleBased extends Processor {
     } catch (error) {
       this.log(`Error processing ${zapMsg.id}(${zapMsg.body}): ${error}`);
       this.channel.nack(message);
+      throw error
     }
   }
 
@@ -98,8 +102,8 @@ class RuleBased extends Processor {
 
     if (!!matcher.groups) {
       result.matchesGroup = zapMsg.isGroupMsg &&
-        !(Object.keys(zapMsg.groupInfo).length === 0) &&
-        matcher.groups.includes(zapMsg.groupInfo.id);
+        !!zapMsg.chatId &&
+        matcher.groups.includes(zapMsg.chatId);
     } else {
       result.matchesGroup = true;
     }

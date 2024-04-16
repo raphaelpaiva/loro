@@ -1,14 +1,13 @@
 ---
 version: "3.8"
 services:
-  venom-http:
+  wpp:
     build:
-      context: ./venom-http
+      context: ./wpp
     ports:
       - 3010:3010
     volumes:
-      - ./venom-http/media:/app/media
-      - ./venom-http/loro.json:/app/loro.json
+      - ./wpp/tokens:/app/tokens
     depends_on:
       queue:
         condition: service_healthy

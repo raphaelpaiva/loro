@@ -50,7 +50,7 @@ class Processor {
     let destination = zapMsg.from;
   
     if (zapMsg.isGroupMsg) {
-      destination = zapMsg.groupInfo.id;
+      destination = zapMsg.chatId;
     }
   
     if (zapMsg.fromMe) {
