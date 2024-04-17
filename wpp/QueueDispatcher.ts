@@ -30,7 +30,7 @@ export class QueueDispatcher {
         try {
           if (!!this.consumer && !!msg) {
             this.consumer(msg);
-            // this.channel?.ack(msg);
+            this.channel?.ack(msg);
           }
         } catch(err) {
           console.error('Error consuming message: ', err);
