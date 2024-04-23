@@ -58,6 +58,10 @@ class RuleBased extends Processor {
     }
     const zapMsg = JSON.parse(message.content.toString());
     
+    if (zapMsg.body?.includes('🦜 Currupaco!')) {
+      return;
+    }
+
     try {
       for (const rule of this.rules) {
         const match = this.matches(rule, zapMsg);
