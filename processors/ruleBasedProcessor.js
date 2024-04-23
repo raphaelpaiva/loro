@@ -2,6 +2,7 @@ const Processor = require('./processor').Processor;
 const path = require('path');
 const fs = require('fs');
 
+const IMG_TOKEN = '!image';
 class RuleBased extends Processor {
   constructor() {
     super('zoa');
@@ -62,18 +63,26 @@ class RuleBased extends Processor {
         const match = this.matches(rule, zapMsg);
         
         if (match.matches) {
-          const responseText = await this.fetchResponse(rule.response, match.regexMatch);
+          let responseText = await this.fetchResponse(rule.response, match.regexMatch);
 
           if (!responseText) {
             this.log(`${rule.name} matched ${zapMsg.id}(${zapMsg.body}), but response was ${responseText}. Rejecting.`);
             continue;
           }
 
+          let responseType = 'chat'
+          if (responseText.startsWith(IMG_TOKEN)) {
+            responseType = 'image';
+            responseText = responseText.substring(responseText.indexOf(IMG_TOKEN) + IMG_TOKEN.length);
+          }
+
           this.log(`Rule ${rule.name} matches ${zapMsg.id}(${zapMsg.body})! Responding with ${responseText}`);
+
           const response = {
             to: this.resolveDestination(zapMsg),
             content: responseText,
-            reply_to: zapMsg.id
+            reply_to: zapMsg.id,
+            type: responseType
           }
 
           this.channel.sendToQueue(this.outputQueueName, Buffer.from(JSON.stringify(response)), {persistent: true});

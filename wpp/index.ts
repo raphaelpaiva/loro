@@ -1,6 +1,6 @@
 import { create, Message, SocketState, Whatsapp } from '@wppconnect-team/wppconnect';
 import { QueueDispatcher } from './QueueDispatcher'
-import client, { Connection } from "amqplib";
+import { ConsumeMessage } from "amqplib";
 
 class WAClient {
   name: string = 'Loro';
@@ -29,10 +29,10 @@ class WAClient {
     
     setTimeout(() => {if(!initialized) {throw new Timeout()}}, this.initTimeout);
   }
-  consumer(msg: client.ConsumeMessage | null): void {
+  consumer(msg: ConsumeMessage | null): void {
     if (!!msg) {
-      const envelope = JSON.parse(msg.content.toString());
-      this.sendMessage(envelope.to, envelope.content, envelope.reply_to)
+      const envelope: Envelope = JSON.parse(msg.content.toString());
+      this.sendMessage(envelope);
     }
   }
   
@@ -99,21 +99,36 @@ class WAClient {
      this.dispatcher.dispatch(Buffer.from(JSON.stringify(message)));
   }
 
-  async sendMessage(destination: string, text: string, msgId?: string) {
-    const message = `${this.header}\n${text}`;
+  async sendMessage(envelope: Envelope) {
+    const destination = envelope.to;
+    const text = envelope.content;
+    const msgId = envelope.reply_to;
+    const type = !!envelope.type ? envelope.type : 'chat';
+    
     const options = !!msgId ? {quotedMsg: msgId} : {};
-    this.client?.sendText(destination, message, options)
-                .then((result) => {
-                  console.log(`Successfully sent message to ${destination}`);
-                })
-                .catch((error) => {
-                  console.error('Error when sending: ', error);
-                });
+    
+    if (type == 'chat') {
+      const message = `${this.header}\n${text}`;
+      this.client?.sendText(destination, message, options)
+                  .then((result) => console.log(`Successfully sent message to ${destination}`))
+                  .catch((error) => console.error('Error when sending: ', error));
+    } else if (type == 'image') {
+      this.client?.sendImageFromBase64(destination, envelope.content, 'image.jpg', undefined, msgId, false)
+                  .then((result) => console.log(`Successfully sent image to ${destination}`))
+                  .catch((error) => console.error('Error when sending: ', error));
+    }
   }
 }
 
 interface MediaMessage extends Message {
   fileBase64Buffer: string;
+}
+
+interface Envelope {
+  to: string,
+  content: string,
+  reply_to?: string,
+  type?: string
 }
 
 class Timeout extends Error {};
