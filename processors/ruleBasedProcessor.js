@@ -122,7 +122,7 @@ class RuleBased extends Processor {
     }
 
     if (!!matcher.senders) {
-      result.matchesSender = !(Object.keys(zapMsg.sender).length === 0) &&
+      result.matchesSender = !!zapMsg.sender && !(Object.keys(zapMsg.sender).length === 0) &&
         matcher.senders.includes(zapMsg.sender.id);
 
     } else {
