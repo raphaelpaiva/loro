@@ -9,17 +9,36 @@ const Processor = require('./processor').Processor;
 class Transcriber extends Processor {
   constructor() {
     super('transcribe');
-    this.tmpPath = path.resolve(__dirname, 'tmp');
+    this.tmpPath    = path.resolve(__dirname, 'tmp');
+    this.configPath = path.resolve(__dirname, 'config.json');
+    this.config = undefined;
     if (!fs.existsSync(this.tmpPath)) {
       this.log(`Creating path ${this.tmpPath}`)
       fs.mkdirSync(this.tmpPath);
     }
+
+    if (fs.existsSync(this.configPath)) {
+      try {
+        this.config = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+        this.log(`Loaded config file.`);
+
+      } catch(err) {
+        this.log(`Error reading configuration: ${e}`);
+      }
+    }
+
   }
 
   consumer(message) {
     try {
       const zapMsg = JSON.parse(message.content.toString());
       
+      if (this.config?.transcriber?.disabled?.includes(zapMsg.chatId)) {
+        this.log(`${zapMsg.chatId} in disabledGroups. Ignoring...`);
+        this.channel.ack(message);
+        return;
+      }
+
       const fileExtension    = mime.extension(zapMsg.mimetype);
       const originalFileName = `${zapMsg.id}.${fileExtension}`;
       const originalFilePath = path.resolve(this.tmpPath, originalFileName);
