@@ -1,4 +1,4 @@
-FROM node
+FROM node:alpine3.19
 WORKDIR /app
 RUN apt update && apt install -y ffmpeg
 COPY package.json package-lock.json /app/
