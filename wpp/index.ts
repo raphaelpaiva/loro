@@ -65,13 +65,13 @@ class WAClient {
     
     let groupName;
     if (message.isGroupMsg) {
-      const chat = await this.client?.getChatById(message.chatId);
+      const chat = await this.client?.getChatById(message.chatId.toString());
       groupName = chat?.name;
     }
     
     const groupIdentifier = !!groupName ? `@${groupName}` : '';
     
-    let msgString = '';
+    let msgString: string | undefined = '';
     if (isMedia) {
       msgString = `!Media: ${message.mimetype}`;
     } else {
