@@ -7,11 +7,9 @@ services:
     ports:
       - 3010:3010
     volumes:
-      - ./wpp/tokens:/app/tokens
-    depends_on:
-      queue:
-        condition: service_healthy
-        restart: true
+      - ./tokens:/app/tokens
+      - ./config.json:/app/config.json
+    stop_signal: SIGUSR1
     restart: unless-stopped
   sorter:
     build:
@@ -19,53 +17,56 @@ services:
     depends_on:
       queue:
         condition: service_healthy
-        restart: true
+    restart: unless-stopped
     command: ["node", "sorter.js"]
   rule_processor:
     build:
       context: ./processors
     volumes:
-      - ./rules:/app/rules/
-    depends_on:
-      queue:
-        condition: service_healthy
-        restart: true
-    command: ["node", "ruleBasedProcessor"]  
+      - ./rules/:/app/rules/
+        #depends_on:
+      #  queue:
+      #condition: service_healthy
+          # restart: true
+    command: ["node", "ruleBasedProcessor"]
+    restart: unless-stopped
   logger:
     build:
       context: ./processors
     command: ["node", "logger.js"]
     volumes:
-      - log:/app/log
+      #- log:/app/log
       - ./log:/app/log
-    depends_on:
-      queue:
-        condition: service_healthy
-        restart: true
+        #    depends_on:
+        #queue:
+        #condition: service_healthy
+        #restart: true
     restart: unless-stopped
   downloader:
     build:
       context: ./processors
     command: ["node", "mediaDownloader.js"]
     volumes:
-      - media:/app/media
+      #- media:/app/media
       - ./media:/app/media
-    depends_on:
-      queue:
-        condition: service_healthy
-        restart: true
+        #depends_on:
+      #      queue:
+      #  condition: service_healthy
+      #  restart: true
     restart: unless-stopped
   transcriber:
     build:
       context: ./processors
       dockerfile: Dockerfile.transcriber
     command: ["node", "transcriber.js"]
-    depends_on:
-      queue:
-        condition: service_healthy
-        restart: true
-      whisper:
-        condition: service_started
+    volumes:
+      - ./config.json:/app/config.json
+      #    depends_on:
+      #queue:
+      #  condition: service_healthy
+      #  restart: true
+      # whisper:
+      #  condition: service_started
     restart: unless-stopped
   queue:
     image: rabbitmq:management-alpine
@@ -77,6 +78,7 @@ services:
       - qv:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD-SHELL", "netstat -antp | grep 5672"]
+    restart: unless-stopped
   whisper:
     build:
       context: ./whisper

@@ -2,32 +2,65 @@ import { create, Message, SocketState, Whatsapp } from '@wppconnect-team/wppconn
 import { QueueDispatcher } from './QueueDispatcher'
 import { ConsumeMessage } from "amqplib";
 
+interface Envelope {
+  to: string,
+  content: string,
+  reply_to?: string,
+  type?: string
+}
+
+interface Config {
+  name: string,
+  header: string,
+  initTimeout: number,
+  connectionStatusInterval: number,
+  adminChatId?: string,
+  startupAdminMessage?: string,
+  shutdownAdminMessage?: string
+}
+
+interface MediaMessage extends Message {
+  fileBase64Buffer: string;
+}
+
+class Timeout extends Error {};
+
+const default_config: Config = {
+  name: 'Loro',
+  header: "🦜 Currupaco!",
+  initTimeout: 60_000,
+  connectionStatusInterval: 5_000,
+  startupAdminMessage: 'Started up! :D',
+  shutdownAdminMessage: 'Shutting down! :('
+}
+
 class WAClient {
-  name: string = 'Loro';
-  header: string = "🦜 Currupaco!"
+  config: Config = default_config;
   client?: Whatsapp;
-  initTimeout: number = 60_000;
-  connectionStatusInterval: number = 5_000;
   connectionStatusCount: number = 0;
   dispatcher: QueueDispatcher
   
   constructor() {
-    new Array('SIGTERM', 'SIGINT').forEach(signal => {
+    new Array('SIGUSR1','SIGTERM', 'SIGINT').forEach(signal => {
       process.on(signal, () => {
         console.log(`${signal} received.`);
         this.terminate();
       });
     });
 
+    this.config = this.readConfig();
+
+    console.log(`Using config\n${JSON.stringify(this.config, null, 2)}`);
+
     let initialized = false;
-    create({session: this.name, deviceName: this.name, browserArgs: ['--no-sandbox']}).then((client) => {
+    create({session: this.config.name, deviceName: this.config.name, browserArgs: ['--no-sandbox']}).then((client) => {
       initialized = true;
       this.init(client);
     }).catch((error) => console.log(error));
 
     this.dispatcher = new QueueDispatcher((msg) => this.consumer(msg))
     
-    setTimeout(() => {if(!initialized) {throw new Timeout()}}, this.initTimeout);
+    setTimeout(() => {if(!initialized) {throw new Timeout()}}, this.config.initTimeout);
   }
   consumer(msg: ConsumeMessage | null): void {
     if (!!msg) {
@@ -37,14 +70,29 @@ class WAClient {
   }
   
   async terminate() {
-    await this.client?.close();
-    await this.dispatcher.terminate();
+    try { 
+      await this.sendAdminMessage(this.config.shutdownAdminMessage);
+    } catch(e) {
+      console.error('Error sending shutdown message:', e);
+    }
+    
+    try {
+      await this.client?.close();
+    } catch(e) {
+      console.error('Error closing client:', e);
+    }
+    
+    try {
+      await this.dispatcher.terminate();
+    } catch(e) {
+      console.error('Error terminating dispatcher:', e);
+    }
   }
 
   async init(client: Whatsapp) {
     this.client = client;
     client.onAnyMessage((message) => this.processMessage(message));
-    setTimeout(() => this.checkConnectionStatus(), this.connectionStatusInterval);
+    setTimeout(() => this.checkConnectionStatus(), this.config.connectionStatusInterval);
   }
 
   async processMessage(message: Message) {
@@ -61,7 +109,7 @@ class WAClient {
   }
 
   private async logMessage(message: Message, isMedia: boolean) {
-    const identifier = `[${this.name}] (${message.id}) ${message.sender.formattedName}`;
+    const identifier = `[${this.config.name}] (${message.id}) ${message.sender.formattedName}`;
     
     let groupName;
     if (message.isGroupMsg) {
@@ -91,8 +139,10 @@ class WAClient {
         throw new Timeout;
       }
       console.log(this.connectionStatusCount, state);
+      setTimeout(() => this.checkConnectionStatus(), this.config.connectionStatusInterval);
+    } else {
+      this.sendAdminMessage(this.config.startupAdminMessage);
     }
-    setTimeout(() => this.checkConnectionStatus(), this.connectionStatusInterval);
   }
 
   async dispatch(message: Message | MediaMessage) {
@@ -108,7 +158,7 @@ class WAClient {
     const options = !!msgId ? {quotedMsg: msgId} : {};
     
     if (type == 'chat') {
-      const message = `${this.header}\n${text}`;
+      const message = `${this.config.header}\n${text}`;
       this.client?.sendText(destination, message, options)
                   .then((result) => console.log(`Successfully sent message to ${destination}`))
                   .catch((error) => console.error('Error when sending: ', error));
@@ -118,20 +168,24 @@ class WAClient {
                   .catch((error) => console.error('Error when sending: ', error));
     }
   }
-}
 
-interface MediaMessage extends Message {
-  fileBase64Buffer: string;
-}
+  async sendAdminMessage(content?: string) {
+    if (!!this.config.adminChatId && !!content) {
+      this.sendMessage({to: this.config.adminChatId, content: content});
+    }
+  }
 
-interface Envelope {
-  to: string,
-  content: string,
-  reply_to?: string,
-  type?: string
-}
+  readConfig(): Config {
+    try {
+      const config: Config = require('./config.json');
 
-class Timeout extends Error {};
+      return {...default_config, ...config}
+    } catch(error) {
+      console.error('Error reading config file. Using defaults.', error);
+      return default_config;
+    }
+  }
+}
 
 function createClient() {
   try {
