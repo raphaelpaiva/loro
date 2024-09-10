@@ -41,7 +41,7 @@ class WAClient {
   dispatcher: QueueDispatcher
   
   constructor() {
-    new Array('SIGUSR1','SIGTERM', 'SIGINT').forEach(signal => {
+    new Array('SIGTERM', 'SIGINT').forEach(signal => {
       process.on(signal, () => {
         console.log(`${signal} received.`);
         this.terminate();

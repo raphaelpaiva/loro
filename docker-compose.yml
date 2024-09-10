@@ -9,7 +9,6 @@ services:
     volumes:
       - ./tokens:/app/tokens
       - ./config.json:/app/config.json
-    stop_signal: SIGUSR1
     restart: unless-stopped
   sorter:
     build:
