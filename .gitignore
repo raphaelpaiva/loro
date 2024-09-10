@@ -6,3 +6,4 @@ message.log
 *.log
 *.png
 rules.js
+config.json
