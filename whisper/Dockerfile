@@ -1,17 +1,17 @@
-FROM ubuntu AS build
+FROM ubuntu
 WORKDIR /app
 
-RUN apt-get update && \
-  apt-get install -y build-essential curl git \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+RUN apt update && apt install -y nvidia-cuda-toolkit git build-essential
+ENV CUDA_DOCKER_ARCH=compute_75
+ENV GGML_CUDA=1
 
 RUN git clone https://github.com/ggerganov/whisper.cpp.git /app
+RUN make
 
-# Uncomment for Apple Silicon
-# ENV UNAME_M=arm64
-# ENV UNAME_p=arm
-# ENV LLAMA_NO_METAL=1
-RUN make -j server
+RUN rm -rf /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1 \
+    /usr/lib/x86_64-linux-gnu/libcuda.so.1 \
+    /usr/lib/x86_64-linux-gnu/libcudadebugger.so.1 \
+    /var/lib/apt/lists/* \
+    /var/cache/apt/archives/*
 
-RUN /app/models/download-ggml-model.sh large-v3
-CMD ["/app/server", "-l", "pt", "-m", "/app/models/ggml-large-v3.bin", "--host", "0.0.0.0", "--port", "8099"]
+CMD ["/app/server", "-l", "pt", "-m", "/app/models/ggml-large-v3.bin", "--host", "0.0.0.0", "--port", "8080"]
