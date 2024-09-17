@@ -3,15 +3,24 @@ const path    = require('path');
 const ffmpeg  = require('fluent-ffmpeg');
 const request = require('request');
 const mime    = require('mime-types');
+const wol     = require('wakeonlan');
 
 const Processor = require('./processor').Processor;
+
+const DEFAULT_CONFIG = {
+  transcriber: {
+    queueUrl:     "amqp://queue:5672",
+    wakeOnLanMAC: undefined,
+    backendUrl:   "http://whisper:8080/inference"
+  }
+};
 
 class Transcriber extends Processor {
   constructor() {
     super('transcribe');
     this.tmpPath    = path.resolve(__dirname, 'tmp');
     this.configPath = path.resolve(__dirname, 'config.json');
-    this.config = undefined;
+    this.config = DEFAULT_CONFIG;
     if (!fs.existsSync(this.tmpPath)) {
       this.log(`Creating path ${this.tmpPath}`)
       fs.mkdirSync(this.tmpPath);
@@ -19,17 +28,19 @@ class Transcriber extends Processor {
 
     if (fs.existsSync(this.configPath)) {
       try {
-        this.config = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+        const config_file = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+        this.config = {...this.config, ...config_file};
         this.log(`Loaded config file.`);
-
       } catch(err) {
-        this.log(`Error reading configuration: ${e}`);
+        this.log(`Error reading configuration. Using defaults. ${e}`);
       }
-    }
 
+      this.log(`Using config: ${JSON.stringify(this.config)}`);
+      this.queueUrl = this.config.transcriber.queueUrl;
+    }
   }
 
-  consumer(message) {
+  async consumer(message) {
     try {
       const zapMsg = JSON.parse(message.content.toString());
       
@@ -37,6 +48,11 @@ class Transcriber extends Processor {
         this.log(`${zapMsg.chatId} in disabledGroups. Ignoring...`);
         this.channel.ack(message);
         return;
+      }
+
+      if (!!this.config.transcriber.wakeOnLanMAC) {
+        this.log(`Waking up ${this.config.transcriber.wakeOnLanMAC}`);
+        await wol(this.config.transcriber.wakeOnLanMAC);
       }
 
       const fileExtension    = mime.extension(zapMsg.mimetype);
@@ -47,31 +63,31 @@ class Transcriber extends Processor {
       const outputFilePath   = path.resolve(this.tmpPath, outputFileName);
 
       const transcriber = this;
-      
+
       if(!!zapMsg.fileBase64Buffer) {
         try {
           this.log(`Transcribing ${zapMsg.id}`);
           const buf = this.parseBuffer(zapMsg);
           fs.writeFileSync(originalFilePath, buf);
-          console.log(`Converting ${originalFilePath} to ${outputFilePath}`);
+          this.log(`Converting ${originalFilePath} to ${outputFilePath}`);
           ffmpeg().input(originalFilePath)
             .audioChannels(1)
             .withAudioFrequency(16000)
             .output(outputFilePath)
             .on('end', () => {
-              console.log(`ffmpeg wrote ${outputFilePath}`);
-              
+              this.log(`ffmpeg wrote ${outputFilePath}`);
+
               const readStream = fs.createReadStream(outputFilePath);
               
-              const req = request.post('http://whisper:8099/inference', function (err, resp, body) {
+              const req = request.post(this.config.transcriber.backendUrl, function (err, resp, body) {
                 if (err) {
-                  console.log('Error!', err);
+                  this.log('Error!', err);
                 } else {
                   const transcript = JSON.parse(body);
                   transcriber.sendTranscript(message, zapMsg, transcript);
                   fs.rm(originalFilePath, () => {});
                   fs.rm(outputFilePath, () => {});
-                  console.log('URL: ', transcript);
+                  this.log('URL: ', transcript);
                 }
               });
   
@@ -145,4 +161,5 @@ try {
   
 } catch (error) {
   transcriber.terminate();
+  this.log(error);
 }
