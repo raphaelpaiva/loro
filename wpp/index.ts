@@ -14,9 +14,11 @@ interface Config {
   header: string,
   initTimeout: number,
   connectionStatusInterval: number,
+  keepAliveMessageInterval: number,
   adminChatId?: string,
   startupAdminMessage?: string,
-  shutdownAdminMessage?: string
+  shutdownAdminMessage?: string,
+  keepAliveMessage: string,
 }
 
 interface MediaMessage extends Message {
@@ -25,13 +27,19 @@ interface MediaMessage extends Message {
 
 class Timeout extends Error {};
 
+const FIVE_SECONDS = 5_000;
+const ONE_MINUTE = 60_000;
+const HALF_HOUR = 30 * ONE_MINUTE;
+
 const default_config: Config = {
   name: 'Loro',
   header: "🦜 Currupaco!",
-  initTimeout: 60_000,
-  connectionStatusInterval: 5_000,
+  initTimeout: ONE_MINUTE,
+  connectionStatusInterval: FIVE_SECONDS,
+  keepAliveMessageInterval: HALF_HOUR,
   startupAdminMessage: 'Started up! :D',
-  shutdownAdminMessage: 'Shutting down! :('
+  shutdownAdminMessage: 'Shutting down! :(',
+  keepAliveMessage: "I'm alive."
 }
 
 class WAClient {
@@ -142,7 +150,12 @@ class WAClient {
       setTimeout(() => this.checkConnectionStatus(), this.config.connectionStatusInterval);
     } else {
       this.sendAdminMessage(this.config.startupAdminMessage);
+      this.keepAliveMessage();
     }
+  }
+  keepAliveMessage() {
+    this.sendAdminMessage(this.config.keepAliveMessage);
+    setTimeout(this.keepAliveMessage, this.config.keepAliveMessageInterval);
   }
 
   async dispatch(message: Message | MediaMessage) {
