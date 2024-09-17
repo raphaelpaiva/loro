@@ -7,7 +7,8 @@ class Processor {
     this.queueName = queueName;
     this.connection = undefined;
     this.channel = undefined;
-    this.outputQueueName = 'send'
+    this.outputQueueName = 'send';
+    this.queueUrl = QUEUE_URL;
 
     new Array('SIGTERM', 'SIGINT').forEach(signal => {
       process.on(signal, () => {
@@ -19,8 +20,8 @@ class Processor {
 
   async connect() {
     if (!this.connection) {
-      this.connection = await amqp.connect(QUEUE_URL);
-      this.log(`Connected to ${QUEUE_URL}`);
+      this.connection = await amqp.connect(this.queueUrl);
+      this.log(`Connected to ${this.queueUrl}`);
       this.channel = await this.connection.createChannel();
       await this.channel.assertQueue(this.queueName, {durable: true});
       this.log(`Got queue ${this.queueName}`);
