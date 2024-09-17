@@ -84,6 +84,14 @@ services:
     ports:
       - 8099:8099
     restart: unless-stopped
+    # Uncomment for GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 volumes:
   qv:
   log:
