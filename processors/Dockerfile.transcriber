@@ -1,7 +1,7 @@
 FROM node:alpine3.19
 WORKDIR /app
-RUN apt update && apt install -y ffmpeg
+RUN apk update && apk add --no-cache ffmpeg
 COPY package.json package-lock.json /app/
 RUN npm install --verbose
 COPY . /app/
-CMD ["node","sorter.js"]
+CMD ["node","transcriber.js"]
