@@ -17,9 +17,11 @@ class Logger extends Processor {
       const logFile = path.resolve(this.logPath, 'message.log');
       const zapMsg = JSON.parse(message.content.toString());
       const messageString = JSON.stringify(zapMsg);
+      const channel = this.channel;
       fs.appendFile(logFile, `\n${messageString}`, function (err) {
         if (err) {
           this.log(`Error writing to message log: ${err}`);
+	        channel.nack(message);
           throw err;
         }
       });
