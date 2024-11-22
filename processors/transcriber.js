@@ -81,13 +81,13 @@ class Transcriber extends Processor {
               
               const req = request.post(this.config.transcriber.backendUrl, function (err, resp, body) {
                 if (err) {
-                  this.log('Error!', err);
+                  console.log('Error!', err);
                 } else {
                   const transcript = JSON.parse(body);
                   transcriber.sendTranscript(message, zapMsg, transcript);
                   fs.rm(originalFilePath, () => {});
                   fs.rm(outputFilePath, () => {});
-                  this.log('URL: ', transcript);
+                  console.log('URL: ', transcript);
                 }
               });
   
