@@ -3,14 +3,40 @@ const path = require('path');
 const fs = require('fs');
 
 const IMG_TOKEN = '!image';
+
+const DEFAULT_CONFIG = {
+  rule_processor: {
+    queueUrl:     "amqp://queue:5672",
+    wakeOnLanMAC: undefined,
+    backendUrl:   "http://whisper:8080/inference"
+  }
+};
+
 class RuleBased extends Processor {
   constructor() {
     super('zoa');
+    this.configPath = path.resolve(__dirname, 'config.json');
+    this.config = DEFAULT_CONFIG;
+
     this.exchange = 'msgex';
     this.outputQueueName = 'send';
     this.rulesFile = path.resolve(__dirname, 'rules', 'rules.js');
     this.rules = [];
     
+    if (fs.existsSync(this.configPath)) {
+      try {
+        const config_file = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+        this.config = {...this.config, ...config_file};
+        this.log(`Loaded config file.`);
+      } catch(err) {
+        this.log(`Error reading configuration. Using defaults. ${e}`);
+      }
+
+      this.log(`Using config: ${JSON.stringify(this.config)}`);
+      this.queueUrl = this.config.rule_processor.queueUrl;
+    }
+    
+
     this.loadRules();
     fs.watchFile(this.rulesFile, (curr, prev) => {
       if (curr.mtimeMs > prev.mtimeMs) {
@@ -67,7 +93,7 @@ class RuleBased extends Processor {
         const match = this.matches(rule, zapMsg);
         
         if (match.matches) {
-          let responseText = await this.fetchResponse(rule.response, match.regexMatch);
+          let responseText = await this.fetchResponse(rule.response, match.regexMatch, zapMsg);
 
           if (!responseText) {
             this.log(`${rule.name} matched ${zapMsg.id}(${zapMsg.body}), but response was ${responseText}. Rejecting.`);
@@ -80,7 +106,7 @@ class RuleBased extends Processor {
             responseText = responseText.substring(responseText.indexOf(IMG_TOKEN) + IMG_TOKEN.length);
           }
 
-          this.log(`Rule ${rule.name} matches ${zapMsg.id}(${zapMsg.body})! Responding with ${responseText}`);
+          this.log(`Rule ${rule.name} matches ${zapMsg.id}(${zapMsg.body})! ${JSON.stringify(match.reason)}; Responding with ${responseText}`);
 
           const response = {
             to: this.resolveDestination(zapMsg),
@@ -93,11 +119,12 @@ class RuleBased extends Processor {
           this.channel.ack(message);
           return;
         } else {
-          this.log(`${rule.name} rejects ${zapMsg.id}(${zapMsg.body}). Reason: ${JSON.stringify(match.reason)}`);
+          if (!!rule.debug) {
+            this.log(`${rule.name} rejects ${zapMsg.id}(${zapMsg.body}). Reason: ${JSON.stringify(match.reason)}`);
+          }
         }
       }
       
-      this.log(`No matches for ${zapMsg.id}(${zapMsg.body}). Discarding.`);
       this.channel.ack(message);
     } catch (error) {
       this.log(`Error processing ${zapMsg.id}(${zapMsg.body}): ${error}`);
@@ -106,44 +133,46 @@ class RuleBased extends Processor {
     }
   }
 
-  matches(matcher, zapMsg) {
+  matches(rule, zapMsg) {
     const result = {
       matchesGroup: false,
       matchesSender: false,
       matchesRegex: false
     };
 
-    if (!!matcher.groups) {
-      result.matchesGroup = zapMsg.isGroupMsg &&
-        !!zapMsg.chatId &&
-        matcher.groups.includes(zapMsg.chatId);
+    if (!!rule.groups) {
+      result.matchesGroup = !!zapMsg.chatId &&
+        rule.groups.includes(zapMsg.chatId);
     } else {
       result.matchesGroup = true;
     }
 
-    if (!!matcher.senders) {
-      result.matchesSender = !!zapMsg.sender && !(Object.keys(zapMsg.sender).length === 0) &&
-        matcher.senders.includes(zapMsg.sender.id);
+    if (!!rule.disabledInChats) {
+      result.matchesGroup = result.matchesGroup && !rule.disabledInChats.includes(zapMsg.chatId);
+    }
+
+    if (!!rule.senders) {
+      result.matchesSender = !!zapMsg.from && rule.senders.includes(zapMsg.from);
 
     } else {
       result.matchesSender = true;
     }
 
     let regexMatch = null;
-    if (!!matcher.regex) {
+    if (!!rule.regex) {
       regexMatch = zapMsg.body?.trim().normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '').match(matcher.regex);
+      .replace(/[\u0300-\u036f]/g, '').match(rule.regex);
       result.matchesRegex = !!regexMatch;
     }
 
     return {
       reason: result,
-      matches: result.matchesGroup && result.matchesRegex && result.matchesGroup,
+      matches: (result.matchesGroup || result.matchesSender) && result.matchesRegex,
       regexMatch: regexMatch
     }
   }
   
-  async fetchResponse(response, regexMatch) {
+  async fetchResponse(response, regexMatch, zapMsg) {
     if (typeof response === 'string') {
       return response;
     }
@@ -153,7 +182,7 @@ class RuleBased extends Processor {
     }
 
     if (typeof response === 'function') {
-      return await response(regexMatch);
+      return await response(regexMatch, zapMsg, this.config);
     }
   }
 }
